@@ -7,16 +7,17 @@ defmodule Pooly.WorkerSupervisor do
     DynamicSupervisor.start_link(__MODULE__, init_arg)
   end
 
-  @spec start_child(pid(), atom(), term()) :: {:ok, pid()}
-  def start_child(supervisor, mod, args) do
+  @spec start_child(pid(), mfa()) :: {:ok, pid()}
+  def start_child(supervisor, {mod, _func, args}) do
     DynamicSupervisor.start_child(supervisor, {mod, args})
   end
 
   # Callback Functions
   @impl DynamicSupervisor
-  def init(_init_arg) do
+  def init([size: size]) do
     DynamicSupervisor.init(
       strategy: :one_for_one,
+      max_children: size,
       max_restarts: 5,
       max_seconds: 5
     )
