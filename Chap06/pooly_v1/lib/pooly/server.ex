@@ -8,22 +8,35 @@ defmodule Pooly.Server do
       size: nil,
       mfa: nil,
       workers: [],
+      monitors: nil,
       worker_sup: nil
     ]
   end
 
   # APIs
-  @spec start_link(pid(), keyword()) :: {:ok, pid()}
-  def start_link(sup, pool_config) do
+  @spec start_link(tuple()) :: {:ok, pid()}
+  def start_link({sup, pool_config}) do
     GenServer.start_link(
       __MODULE__,
       [sup, pool_config],
       name: __MODULE__)
   end
 
+  @spec checkout() :: pid() | :noproc
+  def checkout do
+    GenServer.call(__MODULE__, {:checkout, self()})
+  end
+
+  @spec checkin(pid()) :: no_return()
+  def checkin(worker_pid) do
+    GenServer.cast(__MODULE__, {:checkin, worker_pid})
+  end
+
   # Callback Functions
+  @impl GenServer
   def init([sup, pool_config]) when is_pid(sup) do
-    init(pool_config, %State{ sup: sup })
+    monitors = :ets.new(:monitors, [:private])
+    init(pool_config, %State{ sup: sup, monitors: monitors })
   end
 
   defp init([{:mfa, mfa}|rest], state) do
@@ -43,6 +56,31 @@ defmodule Pooly.Server do
     {:ok, state}
   end
 
+  @impl GenServer
+  def handle_call({:checkout, from_pid}, _from, state) do
+    case state.workers do
+      [worker|rest] ->
+        ref = Process.monitor(from_pid)
+        true = :ets.insert(state.monitors, {worker, ref})
+        {:reply, worker, %{ state | workers: rest }}
+      [] ->
+        {:reply, :noproc, state}
+    end
+  end
+
+  @impl GenServer
+  def handle_cast({:checkin, worker}, state) do
+    case :ets.lookup(state.monitors, worker) do
+      [{pid, ref}] ->
+        true = Process.demonitor(ref)
+        true = :ets.delete(state.monitors, pid)
+        {:noreply, %{ state | workers: [pid|state.workers] }}
+      [] ->
+        {:noreply, state}
+    end
+  end
+
+  @impl GenServer
   def handle_info(
     :start_worker_supervisor,
     state=%State{
@@ -54,6 +92,10 @@ defmodule Pooly.Server do
 
     workers = prepopulate(worker_sup, mfa, size)
     state = %{ state | worker_sup: worker_sup, workers: workers }
+    {:noreply, state}
+  end
+
+  def handle_info(_info, state) do
     {:noreply, state}
   end
 
