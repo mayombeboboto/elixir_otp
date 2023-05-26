@@ -1,25 +1,22 @@
 defmodule Pooly.Server do
   use GenServer
+  alias :ets, as: ETS
   alias Pooly.WorkerSupervisor
+  import :erlang, only: [process_flag: 2]
 
   defmodule State do
-    defstruct [
-      sup: nil,
-      size: nil,
-      mfa: nil,
-      workers: [],
-      monitors: nil,
-      worker_sup: nil
-    ]
+    defstruct sup: nil,
+              size: nil,
+              mfa: nil,
+              workers: [],
+              monitors: nil,
+              worker_sup: nil
   end
 
   # APIs
-  @spec start_link(tuple()) :: {:ok, pid()}
-  def start_link({sup, pool_config}) do
-    GenServer.start_link(
-      __MODULE__,
-      [sup, pool_config],
-      name: __MODULE__)
+  @spec start_link({pid(), keyword()}) :: {:ok, pid()}
+  def start_link(args) do
+    GenServer.start_link(__MODULE__, args, name: __MODULE__)
   end
 
   @spec checkout() :: pid() | :noproc
@@ -32,22 +29,28 @@ defmodule Pooly.Server do
     GenServer.cast(__MODULE__, {:checkin, worker_pid})
   end
 
+  @spec status() :: {integer(), term() | :undefined}
+  def status do
+    GenServer.call(__MODULE__, :status)
+  end
+
   # Callback Functions
   @impl GenServer
-  def init([sup, pool_config]) when is_pid(sup) do
-    monitors = :ets.new(:monitors, [:private])
+  def init({sup, pool_config}) when is_pid(sup) do
+    process_flag(:trap_exit, true)
+    monitors = ETS.new(:monitors, [:private])
     init(pool_config, %State{ sup: sup, monitors: monitors })
   end
 
-  defp init([{:mfa, mfa}|rest], state) do
-    init(rest, %{ state | mfa: mfa })
+  defp init([{:mfa, mfa} | rest], state) do
+    init(rest, %{state | mfa: mfa})
   end
 
-  defp init([{:size, size}|rest], state) do
-    init(rest, %{ state | size: size })
+  defp init([{:size, size} | rest], state) do
+    init(rest, %{state | size: size})
   end
 
-  defp init([_config|rest], state) do
+  defp init([_config | rest], state) do
     init(rest, state)
   end
 
@@ -59,22 +62,28 @@ defmodule Pooly.Server do
   @impl GenServer
   def handle_call({:checkout, from_pid}, _from, state) do
     case state.workers do
-      [worker|rest] ->
+      [worker | rest] ->
         ref = Process.monitor(from_pid)
-        true = :ets.insert(state.monitors, {worker, ref})
+        true = ETS.insert(state.monitors, {worker, ref})
         {:reply, worker, %{ state | workers: rest }}
+
       [] ->
         {:reply, :noproc, state}
     end
   end
 
+  def handle_call(:state, _from, state) do
+    {:reply, {length(state.workers), ETS.info(state.monitors, :size)}, state}
+  end
+
   @impl GenServer
   def handle_cast({:checkin, worker}, state) do
-    case :ets.lookup(state.monitors, worker) do
+    case ETS.lookup(state.monitors, worker) do
       [{pid, ref}] ->
         true = Process.demonitor(ref)
-        true = :ets.delete(state.monitors, pid)
-        {:noreply, %{ state | workers: [pid|state.workers] }}
+        true = ETS.delete(state.monitors, pid)
+        {:noreply, %{ state | workers: [pid | state.workers] }}
+
       [] ->
         {:noreply, state}
     end
@@ -82,11 +91,13 @@ defmodule Pooly.Server do
 
   @impl GenServer
   def handle_info(
-    :start_worker_supervisor,
-    state=%State{
-      sup: main_sup,
-      mfa: mfa,
-      size: size }) do
+        :start_worker_supervisor,
+        state = %State{
+          sup: main_sup,
+          mfa: mfa,
+          size: size
+        }
+      ) do
     {:ok, worker_sup} =
       Supervisor.start_child(main_sup, {WorkerSupervisor, [size: size]})
 
