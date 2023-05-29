@@ -13,7 +13,7 @@ defmodule Pooly.PoolsSupervisor do
   end
 
   # Callback Functions
-  @impl Supervisor
+  @impl DynamicSupervisor
   def init([]) do
     DynamicSupervisor.init(
       strategy: :one_for_one

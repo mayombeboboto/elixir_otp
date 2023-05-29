@@ -12,7 +12,7 @@ defmodule Pooly.Supervisor do
 
   # Callback Function
   @impl Supervisor
-  def init(pool_config) do
+  def init(pools_config) do
     children = [
       {PoolsSupervisor, []},
       {Server, {self(), pools_config}}
