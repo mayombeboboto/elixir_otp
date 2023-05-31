@@ -1,22 +1,24 @@
 defmodule Pooly.Supervisor do
   use Supervisor
 
-  alias Pooly.Server
-  alias Pooly.PoolsSupervisor
+  @type pool_conf() :: [mfa: mfa(), name: binary(), size: pos_integer()]
 
-  # API
-  @spec start_link([keyword()]) :: {:ok, pid()}
+  @spec start_link([pool_conf()]) :: {:ok, pid()}
   def start_link(pools_config) do
-    Supervisor.start_link(__MODULE__, pools_config)
+    Supervisor.start_link(
+      __MODULE__,
+      pools_config,
+      name: __MODULE__
+    )
   end
 
-  # Callback Function
   @impl Supervisor
   def init(pools_config) do
     children = [
-      {PoolsSupervisor, []},
-      {Server, {self(), pools_config}}
+      {Pooly.PoolsSupervisor, []},
+      {Pooly.Server, pools_config}
     ]
+
     Supervisor.init(children, strategy: :one_for_all)
   end
 end

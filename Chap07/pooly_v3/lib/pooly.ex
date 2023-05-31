@@ -3,36 +3,37 @@ defmodule Pooly do
   Documentation for `Pooly`.
   """
   use Application
-  alias Pooly.Server
-  alias Pooly.SampleWorker
+
+  @type pool_name() :: atom()
+  @type pool_conf() :: [mfa: mfa(), name: binary(), size: pos_integer()]
 
   @spec start(:normal, term()) :: {:ok, pid()}
   def start(_type, _args) do
     pools_config = [
-      [name: "Pool1", mfa: {SampleWorker, :start_link, [:nil]}, size: 2],
-      [name: "Pool2", mfa: {SampleWorker, :start_link, [:nil]}, size: 3],
-      [name: "Pool3", mfa: {SampleWorker, :start_link, [:nil]}, size: 4]
+      [name: :pool1, mfa: {Pooly.SampleWorker, :start_link, [:nil]}, size: 2],
+      [name: :pool2, mfa: {Pooly.SampleWorker, :start_link, [:nil]}, size: 3],
+      [name: :pool3, mfa: {Pooly.SampleWorker, :start_link, [:nil]}, size: 4]
     ]
-    start_pool(pools_config)
+    start_pools(pools_config)
   end
 
-  @spec start_pool(keyword()) :: {:ok, pid()}
-  def start_pool(pools_config) do
+  @spec start_pools([pool_conf()]) :: {:ok, pid()}
+  def start_pools(pools_config) do
     Pooly.Supervisor.start_link(pools_config)
   end
 
-  @spec checkout(binary()) :: pid()
+  @spec checkout(pool_name()) :: pid()
   def checkout(pool_name) do
-    Server.checkout(pool_name)
+    Pooly.Server.checkout(pool_name)
   end
 
-  @spec checkin(binary(), pid()) :: no_return()
+  @spec checkin(pool_name(), pid()) :: no_return()
   def checkin(pool_name, worker_pid) do
-    Server.checkin(pool_name, worker_pid)
+    Pooly.Server.checkin(pool_name, worker_pid)
   end
 
-  @spec status(binary()) :: {integer(), term() | :undefined}
+  @spec status(pool_name()) :: {integer(), term() | :undefined}
   def status(pool_name) do
-    Server.status(pool_name)
+    Pooly.Server.status(pool_name)
   end
 end
