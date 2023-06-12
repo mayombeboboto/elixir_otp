@@ -13,32 +13,31 @@ defmodule Blitzy do
   end
 
   defp parse_results(results) do
-    {successes, _failures} =
-      results
-      |> Enum.split_with(fn value ->
-        case value do
-          {:ok, _result} -> true
-          _other -> false
-        end
-      end)
+    {successes, _failures} = split_results(results)
 
-      total_workers = Enum.count(results)
-      total_success = Enum.count(successes)
-      total_failure = total_workers - total_success
+    total_workers = Enum.count(results)
+    total_success = Enum.count(successes)
+    total_failure = total_workers - total_success
 
-      data = successes |> Enum.map(fn {:ok, time} -> time end)
-      average_time = average_time(data)
-      longest_time = Enum.max(data)
-      shortest_time = Enum.min(data)
+    data = successes |> Enum.map(fn {:ok, time} -> time end)
+    average_time = average_time(data)
+    longest_time = Enum.max(data)
+    shortest_time = Enum.min(data)
 
-      IO.puts"""
-      Total workers:     #{total_workers}
-      Successful reqs:   #{total_success}
-      Failed res:        #{total_failure}
-      Average  (msecs):  #{average_time}
-      Longest  (msecs):  #{longest_time}
-      Shortest (msecs):  #{shortest_time}
-      """
+    IO.puts"""
+    Total workers:     #{total_workers}
+    Successful reqs:   #{total_success}
+    Failed res:        #{total_failure}
+    Average  (msecs):  #{average_time}
+    Longest  (msecs):  #{longest_time}
+    Shortest (msecs):  #{shortest_time}
+    """
+  end
+
+  defp split_results(results) do
+    fun = fn {:ok, _result} -> true
+             _other -> false end
+    Enum.split_with(results, fun)
   end
 
   defp average_time(list) do
