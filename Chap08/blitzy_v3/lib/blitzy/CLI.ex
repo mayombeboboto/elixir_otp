@@ -4,19 +4,18 @@ defmodule Blitzy.CLI do
 
   def main(args) do
     Application.get_env(:blitzy, :master_node)
-      |> Node.start
+      |> Node.start()
 
     Application.get_env(:blitzy, :slave_nodes)
       |> Enum.each(&Node.connect(&1))
 
     args
-      |> parse_args
+      |> parse_args()
       |> process_options([node()|Node.list()])
   end
 
   defp parse_args(args) do
-    OptionParser.parse(args, aliases: [n: :requests],
-                              strict: [requests: :integer])
+    OptionParser.parse(args, aliases: [n: :requests], strict: [requests: :integer])
   end
 
   defp process_options(options, nodes) do
@@ -32,6 +31,8 @@ defmodule Blitzy.CLI do
 
   defp do_requests(n_requests, url, nodes) do
     Logger.info "Pummelling #{url} with #{n_requests} requests"
+    Logger.info "Supervisor #{inspect(Process.whereis(Blitzy.TasksSupervisor))}"
+    Logger.info "Nodes #{inspect(nodes)}"
 
     total_nodes  = Enum.count(nodes)
     req_per_node = div(n_requests, total_nodes)
@@ -39,7 +40,7 @@ defmodule Blitzy.CLI do
     nodes
     |> Enum.flat_map(fn node ->
          1..req_per_node |> Enum.map(fn _ ->
-           Task.Supervisor.async({TasksSupervisor, node}, Blitzy.Worker, :start, [url])
+           Task.Supervisor.async({Blitzy.TasksSupervisor, node}, Blitzy.Worker, :start, [url])
          end)
        end)
     |> Enum.map(&Task.await(&1, :infinity))
@@ -58,7 +59,6 @@ defmodule Blitzy.CLI do
     ./blitzy -n 100 http://www.bieberfever.com
     """
     System.halt(0)
-    :ok
   end
 
   defp parse_results(results) do
